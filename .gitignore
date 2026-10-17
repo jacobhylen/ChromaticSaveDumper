@@ -1,0 +1,11 @@
+# ModRetro / third-party binaries: copy these in from your own MR Updater install (see README)
+bin/*
+!bin/.gitkeep
+
+# Save dumps
+*.sav
+
+# Python
+__pycache__/
+*.pyc
+.venv/
