@@ -38,8 +38,10 @@ memory-controller registers needed to enable and bank-switch that RAM.
 | Game Boy Camera, HuC1 | ✅ (untested) |
 | MBC6, MBC7, HuC3, TAMA5 | ❌ refused |
 
-Real-time clock data (MBC3 carts like Pokémon Gold/Silver/Crystal) is **not** included.
-Emulators will ask you to set the clock again.
+For MBC3 carts with a real-time clock (Pokémon Gold/Silver/Crystal), the cart's clock is
+latched and read, and appended as the standard 48-byte RTC footer used by VBA-M, BGB, mGBA
+and SameBoy. VBA-M crashes on clock-cart saves without this footer. Use `--no-rtc` to get a
+plain RAM-only `.sav`.
 
 Tested: Pokémon Gold (MBC3+RTC, 32 KB). The dump passed the game's own save checksum.
 

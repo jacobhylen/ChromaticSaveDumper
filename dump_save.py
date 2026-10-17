@@ -170,6 +170,35 @@ def read_save(bus: CartBus, info: dict) -> bytes:
     return bytes(out)
 
 
+def has_rtc(info: dict) -> bool:
+    return info["mapper"] == "MBC3" and info["cart_type"] in (0x0F, 0x10)
+
+
+def read_rtc_footer(bus: CartBus) -> bytes:
+    """
+    Latch and read the MBC3 real-time clock, returned as the 48-byte footer that
+    VBA-M, BGB, mGBA and SameBoy append to .sav files:
+    5 x uint32 current regs (S, M, H, DL, DH), 5 x uint32 latched regs, uint64 unix time.
+    Latching only copies the running clock into readable registers; it changes nothing.
+    """
+    masks = (0x3F, 0x3F, 0x1F, 0xFF, 0xC1)
+    bus.write_reg(0x0000, 0x0A)  # RAM/RTC enable
+    try:
+        bus.write_reg(0x6000, 0x00)  # latch: 0 -> 1
+        bus.write_reg(0x6000, 0x01)
+        regs = []
+        for reg, mask in zip(range(0x08, 0x0D), masks):
+            bus.write_reg(0x4000, reg)
+            regs.append(bus.read(0xA000, 1)[0] & mask)
+    finally:
+        bus.write_reg(0x4000, 0x00)
+        bus.write_reg(0x0000, 0x00)
+    days = regs[3] | (regs[4] & 1) << 8
+    print(f"  RTC: day {days}, {regs[2]:02d}:{regs[1]:02d}:{regs[0]:02d}"
+          f"{' (halted)' if regs[4] & 0x40 else ''}", flush=True)
+    return struct.pack("<10IQ", *regs, *regs, int(time.time()))
+
+
 def find_chromatic_port(timeout_s: float) -> str:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
@@ -212,6 +241,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--output", type=Path, help="output .sav path")
     ap.add_argument("--header-only", action="store_true", help="identify the cart without reading the save")
+    ap.add_argument("--no-rtc", action="store_true",
+                    help="don't append the 48-byte real-time clock footer (MBC3 clock carts)")
     ap.add_argument("--loader", type=Path, default=DEFAULT_LOADER)
     ap.add_argument("--bitstream", type=Path, default=DEFAULT_BITSTREAM)
     args = ap.parse_args()
@@ -255,14 +286,16 @@ def main() -> int:
             print(f"Verification failed: {diff} bytes differ between reads. Nothing written.")
             return 1
 
+        if has_rtc(info) and not args.no_rtc:
+            print("Reading real-time clock...")
+            first += read_rtc_footer(bus)
+
         out = args.output or HERE / (
             "".join(c if c.isalnum() or c in " -_" else "_" for c in info["title"]).strip() + ".sav")
         if out.exists():
             out = out.with_name(f"{out.stem}_{time.strftime('%Y%m%d-%H%M%S')}{out.suffix}")
         out.write_bytes(first)
         print(f"Saved {len(first)} bytes to {out}")
-        if info["mapper"] == "MBC3" and info["cart_type"] in (0x0F, 0x10):
-            print("Note: this cart has a real-time clock; RTC state is not included in the .sav.")
         return 0
     finally:
         if port is not None:
