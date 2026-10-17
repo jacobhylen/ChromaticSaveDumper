@@ -77,6 +77,11 @@ python dump_save.py --header-only      # just identify the cart
 
 Existing files are never overwritten. A timestamp is added to the name instead.
 
+## License
+
+[MIT](LICENSE). This covers this repository's code only. It doesn't cover the ModRetro
+firmware or openFPGALoader binaries you put in `bin/`.
+
 ## Disclaimer
 
 Not affiliated with or endorsed by ModRetro or Nintendo. Use at your own risk.
